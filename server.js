@@ -108,6 +108,11 @@ app.get('/api/files', async (req, res) => {
     }
 });
 
+// Rota GET para verificar se o servidor está rodando
+app.get('/', (req, res) => {
+    res.send('Servidor rodando! Acesse /api/files para listar arquivos ou /api/upload para enviar arquivos.');
+});
+
 // Define a porta onde o servidor vai rodar e inicia
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
