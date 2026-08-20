@@ -1,7 +1,7 @@
 const path = require('path');
-const { containerClient } = require('../config/azure');
+const { containerClient, tableClient } = require('../config/azure');
 
-const uploadFile = async (req, res) => {
+exports.uploadFile = async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'Nenhum arquivo enviado.' });
@@ -27,6 +27,19 @@ const uploadFile = async (req, res) => {
             blobHTTPHeaders: { blobContentType: req.file.mimetype } // Garante que imagem abra como imagem, pdf como pdf, etc
         });
 
+        //Registro do Log no Table Storage
+        const entidadeLog = {
+            partitionKey: "Uploads",
+            rowKey: String(Date.now()),
+            nomeArquivo: blobName,
+            tamanhoBytes: req.file.size,
+            tipoMime: req.file.mimetype,
+            acao: "Upload",
+            dataHora: new Date().toISOString()
+        };
+
+        await tableClient.createEntity(entidadeLog);
+
         res.status(200).json({ message: 'Upload feito com sucesso no Azure!', blobName });
     } catch (error) {
         console.error("Erro no upload: ", error);
@@ -34,7 +47,7 @@ const uploadFile = async (req, res) => {
     }
 }
 
-const listFiles = async (req, res) => {
+exports.listFiles = async (req, res) => {
     try {
         const filesList = [];
         
@@ -60,7 +73,55 @@ const listFiles = async (req, res) => {
     }
 }
 
-module.exports = {
-    uploadFile,
-    listFiles
-};
+exports.deleteFile = async (req, res) => {
+    try {
+        const blobName = req.params.filename;
+
+        if (!blobName || blobName === 'undefined') {
+            return res.status(400).json({ error: 'Nome do arquivo inválido ou não fornecido.' });
+        }
+
+        const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+        //Registra Log
+        const blobProperties = await blockBlobClient.getProperties();
+        const blobSize = blobProperties.contentLength || 0; // Tenta pegar o tamanho do arquivo, se não conseguir, retorna 0
+        const blobType = blobProperties.blobType || 'unknown'; // Tenta pegar o tipo do blob, se não conseguir, retorna 'unknown'
+
+        const entidadeLog = {
+            partitionKey: "Deletions",
+            rowKey: String(Date.now()),
+            nomeArquivo: blobName,
+            tamanhoBytes: blobSize,
+            tipoMime: blobType,
+            acao: "Delete",
+            dataHora: new Date().toISOString()
+        };
+        
+        await tableClient.createEntity(entidadeLog);
+
+        // Deleta o arquivo do Azure
+        await blockBlobClient.deleteIfExists();
+
+        res.status(200).json({ message: 'Arquivo deletado com sucesso.' });
+    } catch (error) {
+        console.error("Erro ao deletar arquivo: ", error);
+        res.status(500).json({ message: 'Erro ao deletar arquivo.' });
+    }
+}
+
+exports.getLogs = async (req, res) => {
+    try {
+        const logs = [];
+        const entities = tableClient.listEntities();
+
+        for await (const entity of entities) {
+            logs.push(entity);
+        }
+
+        res.status(200).json(logs);
+    } catch (error) {
+        console.error("Erro ao buscar logs: ", error);
+        res.status(500).json({ message: 'Erro ao buscar logs.' });
+    }
+}

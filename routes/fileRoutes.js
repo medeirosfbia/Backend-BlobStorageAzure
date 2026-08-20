@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 
-const { uploadFile, listFiles } = require('../controllers/fileController');
+const fileController = require('../controllers/fileController');
 
 const router = express.Router();
 
@@ -30,11 +30,21 @@ const upload = multer({
 // ==========================================
 // ROTA 1: UPLOAD DE ARQUIVO (/api/upload)
 // ==========================================
-router.post('/upload', upload.single('file'), uploadFile);
+router.post('/upload', upload.single('file'), fileController.uploadFile);
 
 // ==========================================
 // ROTA 2: LISTAR ARQUIVOS (/api/files)
 // ==========================================
-router.get('/files', listFiles);
+router.get('/files', fileController.listFiles);
+
+// ==========================================
+// ROTA 3: BUSCAR LOGS (/api/logs)
+// ==========================================
+router.get('/logs', fileController.getLogs);
+
+// ==========================================
+// ROTA 4: DELETAR ARQUIVO (/api/files/:filename)
+// ==========================================
+router.delete('/files/:filename', fileController.deleteFile);
 
 module.exports = router;
