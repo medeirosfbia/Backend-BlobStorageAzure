@@ -22,7 +22,10 @@ async function autenticarUsuario(req, res, next) {
             return res.status(401).json({ message: 'Usuário não autorizado.' });
         }
 
-        req.usuario = payload;
+        req.usuario = {
+            ...payload,
+            admin: usuario.admin === true
+        };
         next();
     } catch (error) {
         if (error.name !== 'JsonWebTokenError' && error.name !== 'TokenExpiredError') {
