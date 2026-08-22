@@ -6,8 +6,9 @@ const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const containerName = process.env.AZURE_CONTAINER_NAME;
 const tableName = process.env.TABLE_NAME;
 const authTableName = process.env.AUTH_TABLE_NAME;
+const userLogsTableName = process.env.USER_LOGS_TABLE_NAME;
 
-if (!connectionString || !containerName || !tableName) {
+if (!connectionString || !containerName || !tableName || !userLogsTableName || !authTableName) {
     throw new Error('As variáveis do Azure não foram configuradas corretamente.');
 }
 
@@ -15,7 +16,7 @@ const blobServiceClient = BlobServiceClient.fromConnectionString(connectionStrin
 const containerClient = blobServiceClient.getContainerClient(containerName);
 const tableClient = TableClient.fromConnectionString(connectionString, tableName);
 const usersTableClient = TableClient.fromConnectionString(connectionString, authTableName);
-const accessTableClient = TableClient.fromConnectionString(connectionString, 'AccessLogs');
+const accessTableClient = TableClient.fromConnectionString(connectionString, userLogsTableName);
 
 async function initTable() {
     try {

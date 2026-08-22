@@ -2,6 +2,10 @@ const path = require('path');
 const crypto = require('crypto');
 const { containerClient, tableClient } = require('../config/azure');
 
+function obterProprietario(metadata = {}) {
+    return metadata.userId || metadata.userid || null;
+}
+
 exports.uploadFile = async (req, res) => {
     try {
         if (!req.file) {
@@ -58,7 +62,7 @@ exports.listFiles = async (req, res) => {
         
         // O loop varre todos os arquivos que estão dentro do seu container no Azure
         for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
-            if (blob.metadata?.userId !== req.usuario.idUsuario) continue;
+            if (obterProprietario(blob.metadata) !== req.usuario.idUsuario) continue;
             const blockBlobClient = containerClient.getBlockBlobClient(blob.name);
             
             // Verifica se a extensão do arquivo é uma imagem
@@ -90,7 +94,7 @@ exports.deleteFile = async (req, res) => {
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
         const properties = await blockBlobClient.getProperties();
 
-        if (properties.metadata?.userId !== req.usuario.idUsuario) {
+        if (obterProprietario(properties.metadata) !== req.usuario.idUsuario) {
             return res.status(403).json({ message: 'Você não tem permissão para excluir este arquivo.' });
         }
 

@@ -1,10 +1,10 @@
-const { accessTableClient } = require('../config/azure');
 const {
     buscarUsuario,
     validarSenha,
     atualizarSenha,
     gerarToken
 } = require('../services/authService');
+const { registrarAcesso, listarHistorico } = require('../services/accessLogService');
 
 exports.registrarEntrada = async (req, res) => {
     try {
@@ -39,23 +39,36 @@ exports.registrarEntrada = async (req, res) => {
             await atualizarSenha(user, novaSenha);
         }
 
-        // PASSO B: REGISTRAR O LOG NO ACCESSLOGS
-        await accessTableClient.createTable(); 
-        const invertedTimestamp = String(Number.MAX_SAFE_INTEGER - Date.now());
-
-        await accessTableClient.createEntity({
-            partitionKey: idUsuario, 
-            rowKey: invertedTimestamp,
-            nomeLocal: "Portal Web (Antes do Upload)",
-            acao: "Entrada",
-            dataHora: new Date().toISOString()
+        await registrarAcesso({
+            idUsuario,
+            idLocal: 'Portal Web (Antes do Upload)'
         });
 
         const token = gerarToken(user);
-        res.status(200).json({ message: `Bem-vindo(a), ${idUsuario}!`, idUsuario, token, primeiroLogin: false });
+        res.status(200).json({
+            message: `Bem-vindo(a), ${idUsuario}!`,
+            idUsuario,
+            admin: user.admin === true,
+            token,
+            primeiroLogin: false
+        });
 
     } catch (error) {
         console.error("Erro no acesso:", error);
         res.status(500).json({ message: 'Erro interno ao validar o acesso.' });
+    }
+};
+
+exports.listarHistorico = async (req, res) => {
+    try {
+        const historico = await listarHistorico({
+            idUsuario: req.usuario.idUsuario,
+            admin: req.usuario.admin === true
+        });
+
+        return res.status(200).json(historico);
+    } catch (error) {
+        console.error('Erro ao buscar histórico de acessos:', error);
+        return res.status(500).json({ message: 'Erro ao buscar histórico de acessos.' });
     }
 };
