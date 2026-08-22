@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 
 const fileController = require('../controllers/fileController');
+const autenticarUsuario = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
@@ -30,21 +31,21 @@ const upload = multer({
 // ==========================================
 // ROTA 1: UPLOAD DE ARQUIVO (/api/upload)
 // ==========================================
-router.post('/upload', upload.single('file'), fileController.uploadFile);
+router.post('/upload', autenticarUsuario, upload.single('file'), fileController.uploadFile);
 
 // ==========================================
 // ROTA 2: LISTAR ARQUIVOS (/api/files)
 // ==========================================
-router.get('/files', fileController.listFiles);
+router.get('/files', autenticarUsuario, fileController.listFiles);
 
 // ==========================================
 // ROTA 3: BUSCAR LOGS (/api/logs)
 // ==========================================
-router.get('/logs', fileController.getLogs);
+router.get('/logs', autenticarUsuario, fileController.getLogs);
 
 // ==========================================
 // ROTA 4: DELETAR ARQUIVO (/api/files/:filename)
 // ==========================================
-router.delete('/files/:filename', fileController.deleteFile);
+router.delete('/files/:filename', autenticarUsuario, fileController.deleteFile);
 
 module.exports = router;

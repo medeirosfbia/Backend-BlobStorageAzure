@@ -6,8 +6,12 @@ const accessRoutes = require('./routes/accessRoutes');
 
 const app = express();
 
-// Permite receber requisições em formato JSON e libera o CORS para o Front-end
-app.use(cors());
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET não configurado.');
+}
+
+const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+app.use(cors({ origin: allowedOrigin }));
 app.use(express.json());
 
 
@@ -18,6 +22,14 @@ app.get('/', (req, res) => {
 
 app.use('/api/access', accessRoutes);
 app.use('/api', fileRoutes);
+
+app.use((error, req, res, next) => {
+    if (error instanceof require('multer').MulterError || error.message?.includes('Tipo de ficheiro')) {
+        return res.status(400).json({ message: error.message || 'Arquivo inválido.' });
+    }
+    console.error('Erro não tratado:', error);
+    return res.status(500).json({ message: 'Erro interno do servidor.' });
+});
 
 // Define a porta onde o servidor vai rodar e inicia
 const PORT = process.env.PORT || 3000;

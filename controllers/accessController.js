@@ -1,9 +1,10 @@
-const bcrypt = require('bcrypt');
-const { TableClient } = require('@azure/data-tables');
-const { connectionString } = require('../config/azure'); 
-
-const authTableClient = TableClient.fromConnectionString(connectionString, "PUsers");
-const accessTableClient = TableClient.fromConnectionString(connectionString, "AccessLogs");
+const { accessTableClient } = require('../config/azure');
+const {
+    buscarUsuario,
+    validarSenha,
+    atualizarSenha,
+    gerarToken
+} = require('../services/authService');
 
 exports.registrarEntrada = async (req, res) => {
     try {
@@ -14,43 +15,28 @@ exports.registrarEntrada = async (req, res) => {
             return res.status(400).json({ message: 'ID e Senha são obrigatórios.' });
         }
 
-        let user;
-        try {
-            user = await authTableClient.getEntity("Access", idUsuario);
-        } catch (authError) {
+        const user = await buscarUsuario(idUsuario);
+        if (!user) {
             return res.status(401).json({ message: 'Acesso negado: Usuário não cadastrado.' });
         }
 
-        // Verifica se a senha no banco começa com "$2" (Padrão do Bcrypt)
-        const isHashed = user.Password && String(user.Password).startsWith('$2');
+        if (!(await validarSenha(user, pwdUsuario))) {
+            return res.status(401).json({ message: 'Acesso negado: Senha incorreta.' });
+        }
 
-        if (!isHashed) {
-            // PRIMEIRO LOGIN: Verifica em texto plano
-            if (String(pwdUsuario) !== String(user.Password)) {
-                return res.status(401).json({ message: 'Acesso negado: Senha incorreta.' });
+        const isHashed = String(user.Password).startsWith('$2');
+        if (!isHashed && !novaSenha) {
+            return res.status(200).json({
+                primeiroLogin: true,
+                message: 'Primeiro acesso detectado. Por favor, crie uma nova senha segura.'
+            });
+        }
+
+        if (!isHashed && novaSenha) {
+            if (String(novaSenha).length < 6) {
+                return res.status(400).json({ message: 'A nova senha deve ter no mínimo 6 caracteres.' });
             }
-
-            // Se a senha estiver certa, mas ele ainda não digitou a nova senha:
-            if (!novaSenha) {
-                return res.status(200).json({ 
-                    primeiroLogin: true, 
-                    message: 'Primeiro acesso detectado. Por favor, crie uma nova senha segura.' 
-                });
-            }
-
-            // Se ele enviou a nova senha, vamos fazer o hash e atualizar a tabela
-            const saltRounds = 10;
-            user.Password = await bcrypt.hash(novaSenha, saltRounds);
-            
-            // Atualiza a entidade no Azure Table Storage
-            await authTableClient.updateEntity(user, "Replace");
-
-        } else {
-            // LOGIN NORMAL: Verifica usando o Bcrypt
-            const match = await bcrypt.compare(String(pwdUsuario), user.Password);
-            if (!match) {
-                return res.status(401).json({ message: 'Acesso negado: Senha incorreta.' });
-            }
+            await atualizarSenha(user, novaSenha);
         }
 
         // PASSO B: REGISTRAR O LOG NO ACCESSLOGS
@@ -65,7 +51,8 @@ exports.registrarEntrada = async (req, res) => {
             dataHora: new Date().toISOString()
         });
 
-        res.status(200).json({ message: `Bem-vindo(a), ${idUsuario}!`, idUsuario, primeiroLogin: false });
+        const token = gerarToken(user);
+        res.status(200).json({ message: `Bem-vindo(a), ${idUsuario}!`, idUsuario, token, primeiroLogin: false });
 
     } catch (error) {
         console.error("Erro no acesso:", error);

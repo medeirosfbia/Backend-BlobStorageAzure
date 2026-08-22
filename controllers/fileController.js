@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 const { containerClient, tableClient } = require('../config/azure');
 
 exports.uploadFile = async (req, res) => {
@@ -7,24 +8,28 @@ exports.uploadFile = async (req, res) => {
             return res.status(400).json({ message: 'Nenhum arquivo enviado.' });
         }
 
-        // Pega a extensão do arquivo (ex: .pdf, .png)
-        const extension = path.extname(req.file.originalname);
+        const extension = path.extname(req.file.originalname).toLowerCase();
 
         // Pega o nome original do arquivo SEM a extensão
         const nomeOriginalSemExtensao = path.parse(req.file.originalname).name;
         
         // Pega o nome customizado que o usuário digitou, ou usa "arquivo" como padrão
-        const customName = req.body.customName || nomeOriginalSemExtensao;
+        const customName = (req.body.customName || nomeOriginalSemExtensao)
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .slice(0, 80) || 'arquivo';
         
         // Cria um nome único usando o nome customizado + a data de agora em milissegundos
-        const blobName = `${customName}_${Date.now()}${extension}`;
+        const owner = req.usuario.idUsuario;
+        const ownerPrefix = owner.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+        const blobName = `${ownerPrefix}_${crypto.randomUUID()}_${customName}${extension}`;
         
         // Prepara o cliente do Blob para este arquivo específico
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
         
         // Faz o upload do arquivo da memória para o Azure
         await blockBlobClient.uploadData(req.file.buffer, {
-            blobHTTPHeaders: { blobContentType: req.file.mimetype } // Garante que imagem abra como imagem, pdf como pdf, etc
+            blobHTTPHeaders: { blobContentType: req.file.mimetype },
+            metadata: { userId: owner }
         });
 
         //Registro do Log no Table Storage
@@ -52,7 +57,8 @@ exports.listFiles = async (req, res) => {
         const filesList = [];
         
         // O loop varre todos os arquivos que estão dentro do seu container no Azure
-        for await (const blob of containerClient.listBlobsFlat()) {
+        for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
+            if (blob.metadata?.userId !== req.usuario.idUsuario) continue;
             const blockBlobClient = containerClient.getBlockBlobClient(blob.name);
             
             // Verifica se a extensão do arquivo é uma imagem
@@ -82,11 +88,15 @@ exports.deleteFile = async (req, res) => {
         }
 
         const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+        const properties = await blockBlobClient.getProperties();
+
+        if (properties.metadata?.userId !== req.usuario.idUsuario) {
+            return res.status(403).json({ message: 'Você não tem permissão para excluir este arquivo.' });
+        }
 
         //Registra Log
-        const blobProperties = await blockBlobClient.getProperties();
-        const blobSize = blobProperties.contentLength || 0; // Tenta pegar o tamanho do arquivo, se não conseguir, retorna 0
-        const blobType = blobProperties.blobType || 'unknown'; // Tenta pegar o tipo do blob, se não conseguir, retorna 'unknown'
+        const blobSize = properties.contentLength || 0;
+        const blobType = properties.blobType || 'unknown';
 
         const entidadeLog = {
             partitionKey: "Deletions",
