@@ -1,8 +1,7 @@
 const crypto = require('crypto');
 const { accessTableClient } = require('../config/azure');
 
-const ACCESS_LOCATION = 'Portal Web';
-const ACCESS_ACTION = 'Entrada';
+const DEFAULT_LOCATION = 'Portal Web';
 
 function normalizarLocal(idLocal) {
     return String(idLocal || 'local')
@@ -10,25 +9,42 @@ function normalizarLocal(idLocal) {
         .slice(0, 80) || 'local';
 }
 
-function criarRowKey(data, idLocal) {
+function criarRowKey(data, acao, nomeArquivo = '') {
     const invertedTimestamp = String(Number.MAX_SAFE_INTEGER - data.getTime()).padStart(16, '0');
-    return `${invertedTimestamp}_${normalizarLocal(idLocal)}_${crypto.randomUUID()}`;
+    const identificador = nomeArquivo ? `${acao}_${nomeArquivo}` : acao;
+    return `${invertedTimestamp}_${normalizarLocal(identificador)}_${crypto.randomUUID()}`;
 }
 
-async function registrarAcesso({ idUsuario, idLocal = ACCESS_LOCATION, acao = ACCESS_ACTION, data = new Date() }) {
+async function registrarAcao({
+    idUsuario,
+    acao,
+    nomeArquivo = null,
+    idLocal = DEFAULT_LOCATION,
+    data = new Date()
+}) {
+    if (!idUsuario || !acao) {
+        throw new Error('Usuário e ação são obrigatórios para registrar o log.');
+    }
+
     await accessTableClient.createTable();
 
     const entidade = {
         partitionKey: idUsuario,
-        rowKey: criarRowKey(data, idLocal),
+        rowKey: criarRowKey(data, acao, nomeArquivo),
         idUsuario,
         nomeLocal: idLocal,
         acao,
         dataHora: data.toISOString()
     };
 
+    if (nomeArquivo) entidade.nomeArquivo = nomeArquivo;
+
     await accessTableClient.createEntity(entidade);
     return entidade;
+}
+
+async function registrarAcesso({ idUsuario, idLocal = DEFAULT_LOCATION, data = new Date() }) {
+    return registrarAcao({ idUsuario, idLocal, acao: 'Entrar', data });
 }
 
 async function listarHistorico({ idUsuario, admin = false, dias = 30 }) {
@@ -47,6 +63,7 @@ async function listarHistorico({ idUsuario, admin = false, dias = 30 }) {
             idUsuario: entidade.partitionKey,
             nomeLocal: entidade.nomeLocal,
             acao: entidade.acao,
+            nomeArquivo: entidade.nomeArquivo || entidade.nomearquivo || null,
             dataHora: entidade.dataHora,
             rowKey: entidade.rowKey
         });
@@ -56,6 +73,7 @@ async function listarHistorico({ idUsuario, admin = false, dias = 30 }) {
 }
 
 module.exports = {
+    registrarAcao,
     registrarAcesso,
     listarHistorico,
     criarRowKey

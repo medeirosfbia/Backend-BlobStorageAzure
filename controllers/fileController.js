@@ -1,6 +1,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const { containerClient, tableClient } = require('../config/azure');
+const { registrarAcao } = require('../services/accessLogService');
 
 function obterProprietario(metadata = {}) {
     return metadata.userId || metadata.userid || null;
@@ -48,6 +49,12 @@ exports.uploadFile = async (req, res) => {
         };
 
         await tableClient.createEntity(entidadeLog);
+        await registrarAcao({
+            idUsuario: owner,
+            acao: 'Upload',
+            nomeArquivo: blobName,
+            idLocal: 'Azure Blob Storage'
+        });
 
         res.status(200).json({ message: 'Upload feito com sucesso no Azure!', blobName });
     } catch (error) {
@@ -59,10 +66,12 @@ exports.uploadFile = async (req, res) => {
 exports.listFiles = async (req, res) => {
     try {
         const filesList = [];
+        const visualizarTodos = req.query.scope === 'all' && req.usuario.admin === true;
         
         // O loop varre todos os arquivos que estão dentro do seu container no Azure
         for await (const blob of containerClient.listBlobsFlat({ includeMetadata: true })) {
-            if (obterProprietario(blob.metadata) !== req.usuario.idUsuario) continue;
+            const proprietario = obterProprietario(blob.metadata);
+            if (!visualizarTodos && proprietario !== req.usuario.idUsuario) continue;
             const blockBlobClient = containerClient.getBlockBlobClient(blob.name);
             
             // Verifica se a extensão do arquivo é uma imagem
@@ -71,7 +80,8 @@ exports.listFiles = async (req, res) => {
             filesList.push({
                 name: blob.name,
                 url: blockBlobClient.url, // O link público do arquivo
-                isImage: isImage
+                isImage: isImage,
+                idUsuario: proprietario
             });
         }
         
@@ -112,10 +122,16 @@ exports.deleteFile = async (req, res) => {
             dataHora: new Date().toISOString()
         };
         
-        await tableClient.createEntity(entidadeLog);
-
         // Deleta o arquivo do Azure
         await blockBlobClient.deleteIfExists();
+
+        await tableClient.createEntity(entidadeLog);
+        await registrarAcao({
+            idUsuario: req.usuario.idUsuario,
+            acao: 'Delete',
+            nomeArquivo: blobName,
+            idLocal: 'Azure Blob Storage'
+        });
 
         res.status(200).json({ message: 'Arquivo deletado com sucesso.' });
     } catch (error) {
