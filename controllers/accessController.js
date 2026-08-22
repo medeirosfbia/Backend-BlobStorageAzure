@@ -41,7 +41,7 @@ exports.registrarEntrada = async (req, res) => {
 
         await registrarAcesso({
             idUsuario,
-            idLocal: 'Portal Web (Antes do Upload)'
+            idLocal: 'Portal Web'
         });
 
         const token = gerarToken(user);
