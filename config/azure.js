@@ -5,7 +5,7 @@ const { TableClient } = require('@azure/data-tables');
 const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const containerName = process.env.AZURE_CONTAINER_NAME;
 const tableName = process.env.TABLE_NAME;
-const authTableName = process.env.AUTH_TABLE_NAME || 'PUsers';
+const authTableName = process.env.AUTH_TABLE_NAME;
 
 if (!connectionString || !containerName || !tableName) {
     throw new Error('As variáveis do Azure não foram configuradas corretamente.');
