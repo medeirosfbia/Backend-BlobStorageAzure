@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fileRoutes = require('./routes/fileRoutes');
+const accessRoutes = require('./routes/accessRoutes');
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.get('/', (req, res) => {
     res.send('Servidor rodando! Acesse /api/files para listar arquivos ou /api/upload para enviar arquivos.');
 });
 
+app.use('/api/access', accessRoutes);
 app.use('/api', fileRoutes);
 
 // Define a porta onde o servidor vai rodar e inicia
