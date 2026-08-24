@@ -18,7 +18,7 @@ const upload = multer({
     },
     fileFilter: (req, file, cb) => {
         // Aceita apenas imagens e PDFs
-        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'image/gif', 'image/jpg', 'text/plain'];
         
         if (allowedMimeTypes.includes(file.mimetype)) {
             cb(null, true);
